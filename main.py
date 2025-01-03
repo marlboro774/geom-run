@@ -25,7 +25,6 @@ BONUS_SIZE = 20
 SPAWN_DELAY = 1500
 BONUS_SPAWN_DELAY = 2000
 BONUS_SCORE = 100
-
 font = pygame.font.Font(None, 36)
 
 pygame.mixer.init()
