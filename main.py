@@ -7,6 +7,8 @@ pygame.init()
 WIDTH, HEIGHT = 800, 400
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Geometry Run")
+background_image = pygame.image.load('images/bg.png')
+
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -35,6 +37,29 @@ pygame.mixer.music.play(-1)
 
 death_sound = pygame.mixer.Sound("death_sound.mp3")
 bonus_sound = pygame.mixer.Sound("bonus_sound.mp3")
+
+
+
+
+class Player(pygame.sprite.Sprite):
+    image = pygame.image.load('images/player.png')
+
+    def __init__(self, pos):
+        super().__init__(pos)
+        self.image = Player.image
+        self.rect = self.image.get_rect()
+        # вычисляем маску для эффективного сравнения
+        self.mask = pygame.mask.from_surface(self.image)
+
+
+# class Bonus(pygame.sprite.Sprite):
+#     player = pygame.image.load('images/player.png')
+#     player.mask = pygame.mask.from_surface(player.image)
+#
+# class Spike(pygame.sprite.Sprite):
+#     player = pygame.image.load('images/player.png')
+#     player.mask = pygame.mask.from_surface(player.image)
+
 
 
 class GameProcess:
@@ -67,7 +92,7 @@ class GameProcess:
 
         running = True
         while running:
-            screen.fill(WHITE)
+            screen.blit(background_image, (0, 0))
 
             self.background_x -= self.background_speed
             if self.background_x <= -WIDTH:
@@ -116,9 +141,8 @@ class GameProcess:
 
             self.bonuses = [bonus for bonus in self.bonuses if bonus.x + BONUS_SIZE > 0]
 
-            player_rect = pygame.Rect(self.player_x, self.player_y, PLAYER_SIZE, PLAYER_SIZE)
             for obstacle in self.obstacles:
-                if player_rect.colliderect(obstacle):
+                if not pygame.sprite.collide_mask(player, obstacle):
                     death_sound.play()
                     running = False
 
@@ -133,18 +157,14 @@ class GameProcess:
 
             self.score += 1
 
-            pygame.draw.rect(screen, BLUE, player_rect)
-
             for obstacle in self.obstacles:
-                # Отрисовка препятствия как треугольника
-                pygame.draw.polygon(screen, RED, [
-                    (obstacle.x, obstacle.y + OBSTACLE_HEIGHT),
-                    (obstacle.x + OBSTACLE_WIDTH // 2, obstacle.y),
-                    (obstacle.x + OBSTACLE_WIDTH, obstacle.y + OBSTACLE_HEIGHT)
-                ])
+                obstacle_image = pygame.image.load('images/spike.png')
+                screen.blit(obstacle_image, (obstacle.x, obstacle.y))
 
             for bonus in self.bonuses:
-                pygame.draw.rect(screen, YELLOW, bonus)
+                bonus_image = pygame.image.load('images/bonus.png') # БОНУСЫ
+                bonus_image_resized = pygame.transform.scale(bonus_image, (40, 40))
+                screen.blit(bonus_image_resized, bonus.topleft)
 
             score_text = font.render(f"Score: {self.score // 10}", True, BLACK)
             screen.blit(score_text, (10, 10))
@@ -156,9 +176,9 @@ class GameProcess:
 
     def game_over(self):
         pygame.mixer.music.stop()
-        screen.fill(WHITE)
-        game_over_text = font.render("Game Over!", True, BLACK)
-        score_text = font.render(f"Final Score: {self.score // 10}", True, BLACK)
+        screen.blit(background_image, (0, 0))
+        game_over_text = font.render("Game Over!", True, WHITE)
+        score_text = font.render(f"Final Score: {self.score // 10}", True, WHITE)
         screen.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2 - 100))
         screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, HEIGHT // 2 - 50))
 
@@ -196,10 +216,10 @@ class MainMenu:
         self.customize_button_radius = 30
 
     def draw(self):
-        screen.fill(WHITE)
+        screen.blit(background_image, (0, 0))
 
         title_font = pygame.font.Font(None, 72)
-        title_text = title_font.render("Geometry Run", True, BLACK)
+        title_text = title_font.render("Geometry Run", True, WHITE)
         screen.blit(title_text, (
             WIDTH // 2 - title_text.get_width() // 2,
             HEIGHT // 4 - title_text.get_height() // 2
@@ -214,9 +234,9 @@ class MainMenu:
 
         pygame.draw.circle(screen, BLUE, self.customize_button_center, self.customize_button_radius)
         pygame.draw.rect(screen, YELLOW, (
-            self.customize_button_center[0] - 10,
-            self.customize_button_center[1] - 10,
-            20, 20
+            self.customize_button_center[0] - 12,
+            self.customize_button_center[1] - 12,
+            25, 25
         ))
         smile = font.render(":)", True, BLACK)
         screen.blit(smile, (
