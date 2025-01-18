@@ -42,7 +42,7 @@ class GameProcess:
         self.player_x = 100
         self.player_y = HEIGHT - PLAYER_SIZE - 10
         self.player_speed_y = 0
-        self.player_jump = -10
+        self.player_jump = -20
         self.gravity = 1
         self.player_on_ground = True
 
