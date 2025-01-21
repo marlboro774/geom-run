@@ -38,6 +38,8 @@ pygame.mixer.music.play(-1)
 death_sound = pygame.mixer.Sound("death_sound.mp3")
 bonus_sound = pygame.mixer.Sound("bonus_sound.mp3")
 
+all_sprites = pygame.sprite.Group()
+obstacles = pygame.sprite.Group()
 
 
 
@@ -45,31 +47,63 @@ class Player(pygame.sprite.Sprite):
     image = pygame.image.load('images/player.png')
 
     def __init__(self, pos):
-        super().__init__(pos)
+        super().__init__(all_sprites)
         self.image = Player.image
-        self.rect = self.image.get_rect()
+        self.rect = self.image.get_rect(topleft=pos)
+        # вычисляем маску для эффективного сравнения
+        self.mask = pygame.mask.from_surface(self.image)
+        self.gravity = 1
+        self.onGround = False
+        self.died = False
+        self.win = False
+        # self.image = pygame.transform.smoothscale(self, (32, 32))
+        # self.rect = self.image.get_rect(center=pos)
+        self.jump_amount = 10
+        self.particles = []
+        self.isjump = False
+        self.player_x = 100
+        self.player_y = HEIGHT - PLAYER_SIZE - 10
+        self.player_speed_y = 0
+
+
+
+
+
+
+class Bonus(pygame.sprite.Sprite):
+    image = pygame.image.load('images/bonus.png')
+
+    def __init__(self, pos):
+        super().__init__(all_sprites)
+        self.image = Bonus.image
+        self.rect = self.image.get_rect(topleft=pos)
         # вычисляем маску для эффективного сравнения
         self.mask = pygame.mask.from_surface(self.image)
 
+class Obstacle(pygame.sprite.Sprite):
+    image = pygame.image.load('images/spike.png')
 
-# class Bonus(pygame.sprite.Sprite):
-#     player = pygame.image.load('images/player.png')
-#     player.mask = pygame.mask.from_surface(player.image)
-#
-# class Spike(pygame.sprite.Sprite):
-#     player = pygame.image.load('images/player.png')
-#     player.mask = pygame.mask.from_surface(player.image)
+    def __init__(self, pos):
+        super().__init__(obstacles)
+        self.image = Obstacle.image
+        self.rect = self.image.get_rect(topleft=pos)
+        # вычисляем маску для эффективного сравнения
+        self.mask = pygame.mask.from_surface(self.image)
+
+    def update(self, player):
+        # если ещё в небе
+        if not pygame.sprite.collide_mask(self, player):
+            self.rect = self.rect.move(0, 1)
+            death_sound.play()
+            running = False
+
+
 
 
 
 class GameProcess:
     def __init__(self):
-        self.player_x = 100
-        self.player_y = HEIGHT - PLAYER_SIZE - 10
-        self.player_speed_y = 0
-        self.player_jump = -20
-        self.gravity = 1
-        self.player_on_ground = True
+        self.player = Player((150, 150))
 
         self.obstacles = []
         self.bonuses = []
@@ -106,17 +140,17 @@ class GameProcess:
                     sys.exit()
 
             keys = pygame.key.get_pressed()
-            if keys[pygame.K_SPACE] and self.player_on_ground:
-                self.player_speed_y = self.player_jump
-                self.player_on_ground = False
+            if keys[pygame.K_SPACE] and self.player.onGround:
+                self.player.player_speed_y = self.player.jump_amount = 10
+                self.player.player_on_ground = False
 
-            self.player_speed_y += self.gravity
-            self.player_y += self.player_speed_y
+            self.player.player_speed_y += self.player.gravity
+            self.player.player_y += self.player.player_speed_y
 
-            if self.player_y >= HEIGHT - PLAYER_SIZE - 10:
-                self.player_y = HEIGHT - PLAYER_SIZE - 10
-                self.player_speed_y = 0
-                self.player_on_ground = True
+            if self.player.player_y >= HEIGHT - PLAYER_SIZE - 10:
+                self.player.player_y = HEIGHT - PLAYER_SIZE - 10
+                self.player.player_speed_y = 0
+                self.player.onGround = True
 
             self.obstacle_spawn_timer += clock.get_time()
             if self.obstacle_spawn_timer > SPAWN_DELAY:
@@ -142,15 +176,13 @@ class GameProcess:
             self.bonuses = [bonus for bonus in self.bonuses if bonus.x + BONUS_SIZE > 0]
 
             for obstacle in self.obstacles:
-                if not pygame.sprite.collide_mask(player, obstacle):
-                    death_sound.play()
-                    running = False
+                obstacles.update(self.player)
 
-            for bonus in self.bonuses[:]:
-                if player_rect.colliderect(bonus):
-                    bonus_sound.play()
-                    self.bonuses.remove(bonus)
-                    self.score += BONUS_SCORE
+            # for bonus in self.bonuses[:]:
+            #     if player_rect.colliderect(bonus):
+            #         bonus_sound.play()
+            #         self.bonuses.remove(bonus)
+            #         self.score += BONUS_SCORE
 
             if self.score % 500 == 0:
                 self.obstacle_speed += 0.1
