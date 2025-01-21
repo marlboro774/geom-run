@@ -5,7 +5,7 @@ import pytmx
 
 pygame.init()
 
-WIDTH, HEIGHT = 800, 400
+WIDTH, HEIGHT = 800, 640
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Geometry Run")
 
@@ -13,13 +13,14 @@ WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 BLUE = (50, 150, 255)
 RED = (255, 50, 50)
-GREEN = (50, 255, 50)
 YELLOW = (255, 255, 50)
+GREEN = (50, 255, 50)
 
 FPS = 60
 clock = pygame.time.Clock()
 
 PLAYER_SIZE = 30
+PLAYER_SPEED_X = 5  # Скорость движения игрока вправо
 OBSTACLE_WIDTH = 30
 OBSTACLE_HEIGHT = 50
 BONUS_SIZE = 20
@@ -37,11 +38,15 @@ pygame.mixer.music.play(-1)
 death_sound = pygame.mixer.Sound("death_sound.mp3")
 bonus_sound = pygame.mixer.Sound("bonus_sound.mp3")
 
+tmx_data = pytmx.load_pygame("level1.tmx")
+TILE_SIZE = tmx_data.tilewidth
+
 
 class GameProcess:
     def __init__(self):
-        self.player_x = 100
+        self.player_x = WIDTH // 3
         self.player_y = HEIGHT - PLAYER_SIZE - 10
+        self.player_speed_x = PLAYER_SPEED_X
         self.player_speed_y = 0
         self.player_jump = -20
         self.gravity = 1
@@ -54,13 +59,20 @@ class GameProcess:
         self.obstacle_spawn_timer = 0
         self.bonus_spawn_timer = 0
 
-        self.background_x = 0
-        self.background_speed = 2
-
         self.score = 0
+
+        self.camera_x = 0
 
     def reset_game(self):
         self.__init__()
+
+    def draw_map(self, surface):
+        for layer in tmx_data.visible_layers:
+            if isinstance(layer, pytmx.TiledTileLayer):
+                for x, y, gid in layer:
+                    tile = tmx_data.get_tile_image_by_gid(gid)
+                    if tile:
+                        surface.blit(tile, (x * TILE_SIZE - self.camera_x, y * TILE_SIZE))
 
     def main(self):
         pygame.mixer.music.load(game_music)
@@ -70,11 +82,7 @@ class GameProcess:
         while running:
             screen.fill(WHITE)
 
-            self.background_x -= self.background_speed
-            if self.background_x <= -WIDTH:
-                self.background_x = 0
-            pygame.draw.rect(screen, GREEN, (self.background_x, HEIGHT - 50, WIDTH, 50))
-            pygame.draw.rect(screen, GREEN, (self.background_x + WIDTH, HEIGHT - 50, WIDTH, 50))
+            self.draw_map(screen)
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -86,67 +94,19 @@ class GameProcess:
                 self.player_speed_y = self.player_jump
                 self.player_on_ground = False
 
+            self.camera_x += self.player_speed_x
+
             self.player_speed_y += self.gravity
             self.player_y += self.player_speed_y
 
-            if self.player_y >= HEIGHT - PLAYER_SIZE - 10:
-                self.player_y = HEIGHT - PLAYER_SIZE - 10
+            if self.player_y >= HEIGHT - PLAYER_SIZE:
+                self.player_y = HEIGHT - PLAYER_SIZE
                 self.player_speed_y = 0
                 self.player_on_ground = True
 
-            self.obstacle_spawn_timer += clock.get_time()
-            if self.obstacle_spawn_timer > SPAWN_DELAY:
-                self.obstacle_spawn_timer = 0
-                self.obstacles.append(
-                    pygame.Rect(WIDTH, HEIGHT - OBSTACLE_HEIGHT - 10, OBSTACLE_WIDTH, OBSTACLE_HEIGHT))
+            pygame.draw.rect(screen, BLUE, (self.player_x, self.player_y, PLAYER_SIZE, PLAYER_SIZE))
 
-            for obstacle in self.obstacles:
-                obstacle.x -= self.obstacle_speed
-
-            self.obstacles = [obstacle for obstacle in self.obstacles if obstacle.x + OBSTACLE_WIDTH > 0]
-
-            self.bonus_spawn_timer += clock.get_time()
-            if self.bonus_spawn_timer > BONUS_SPAWN_DELAY:
-                self.bonus_spawn_timer = 0
-                self.bonuses.append(
-                    pygame.Rect(random.randint(WIDTH, WIDTH + 200), random.randint(50, HEIGHT - 100), BONUS_SIZE,
-                                BONUS_SIZE))
-
-            for bonus in self.bonuses:
-                bonus.x -= self.obstacle_speed
-
-            self.bonuses = [bonus for bonus in self.bonuses if bonus.x + BONUS_SIZE > 0]
-
-            player_rect = pygame.Rect(self.player_x, self.player_y, PLAYER_SIZE, PLAYER_SIZE)
-            for obstacle in self.obstacles:
-                if player_rect.colliderect(obstacle):
-                    death_sound.play()
-                    running = False
-
-            for bonus in self.bonuses[:]:
-                if player_rect.colliderect(bonus):
-                    bonus_sound.play()
-                    self.bonuses.remove(bonus)
-                    self.score += BONUS_SCORE
-
-            if self.score % 500 == 0:
-                self.obstacle_speed += 0.1
-
-            self.score += 1
-
-            pygame.draw.rect(screen, BLUE, player_rect)
-
-            for obstacle in self.obstacles:
-                # Отрисовка препятствия как треугольника
-                pygame.draw.polygon(screen, RED, [
-                    (obstacle.x, obstacle.y + OBSTACLE_HEIGHT),
-                    (obstacle.x + OBSTACLE_WIDTH // 2, obstacle.y),
-                    (obstacle.x + OBSTACLE_WIDTH, obstacle.y + OBSTACLE_HEIGHT)
-                ])
-
-            for bonus in self.bonuses:
-                pygame.draw.rect(screen, YELLOW, bonus)
-
+            # Отрисовка счета
             score_text = font.render(f"Score: {self.score // 10}", True, BLACK)
             screen.blit(score_text, (10, 10))
 
