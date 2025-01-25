@@ -45,25 +45,41 @@ obstacles = pygame.sprite.Group()
 
 class Player(pygame.sprite.Sprite):
     image = pygame.image.load('images/player.png')
+    image1 = pygame.transform.scale(image, (70, 70))
 
     def __init__(self, pos):
         super().__init__(all_sprites)
-        self.image = Player.image
-        self.rect = self.image.get_rect(topleft=pos)
+        self.image = Player.image1
         # вычисляем маску для эффективного сравнения
         self.mask = pygame.mask.from_surface(self.image)
-        self.gravity = 1
-        self.onGround = False
+        self.gravity = 0.2
+        self.onGround = True
         self.died = False
         self.win = False
-        # self.image = pygame.transform.smoothscale(self, (32, 32))
-        # self.rect = self.image.get_rect(center=pos)
+        self.rect = self.image.get_rect(center=pos)
         self.jump_amount = 10
         self.particles = []
         self.isjump = False
         self.player_x = 100
         self.player_y = HEIGHT - PLAYER_SIZE - 10
-        self.player_speed_y = 0
+        self.player_speed_y = 20
+
+    def jump(self):
+        self.player_speed_y = self.jump_amount = 10
+        self.onGround = False
+
+    def update(self, event=None):
+        if event and event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE and self.onGround:
+            self.jump()
+            print(event)
+        elif event is None:
+            self.player_speed_y += self.gravity
+            self.rect.y += self.player_speed_y
+
+
+
+
+
 
 
 
@@ -127,6 +143,8 @@ class GameProcess:
         running = True
         while running:
             screen.blit(background_image, (0, 0))
+            all_sprites.draw(screen)
+            obstacles.draw(screen)
 
             self.background_x -= self.background_speed
             if self.background_x <= -WIDTH:
@@ -138,19 +156,12 @@ class GameProcess:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_SPACE] and self.player.onGround:
-                self.player.player_speed_y = self.player.jump_amount = 10
-                self.player.player_on_ground = False
-
-            self.player.player_speed_y += self.player.gravity
-            self.player.player_y += self.player.player_speed_y
-
-            if self.player.player_y >= HEIGHT - PLAYER_SIZE - 10:
-                self.player.player_y = HEIGHT - PLAYER_SIZE - 10
-                self.player.player_speed_y = 0
-                self.player.onGround = True
+                all_sprites.update(event)
+            all_sprites.update()
+            # if self.player.player_y >= HEIGHT - PLAYER_SIZE - 10:
+            #     self.player.player_y = HEIGHT - PLAYER_SIZE - 10
+            #     self.player.player_speed_y = 0
+            #     self.player.onGround = True
 
             self.obstacle_spawn_timer += clock.get_time()
             if self.obstacle_spawn_timer > SPAWN_DELAY:
