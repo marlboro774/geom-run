@@ -38,7 +38,7 @@ class Player(pygame.sprite.Sprite):
 
         self.image = pygame.transform.smoothscale(image, (32, 32))
         self.rect = self.image.get_rect(center=pos)
-        self.jump_amount = 10
+        self.jump_amount = 10.5
         self.particles = []
         self.isjump = False
         self.vel = Vector2(0, 0)
@@ -86,7 +86,6 @@ class Player(pygame.sprite.Sprite):
                 if isinstance(p, Platform):
 
                     if yvel > 0:
-                        """if player is going down(yvel is +)"""
                         self.rect.bottom = p.rect.top
                         self.vel.y = 0
 
@@ -230,7 +229,7 @@ def won_screen():
     else:
         txt_win1 = f"level{level}"
         txt_win2 = f"Coins: {coins}/6. "
-    txt_win = f"{txt_win1} You beat {txt_win2}! Press SPACE to restart, or ESC to exit"
+    txt_win = f"{txt_win1} Вы собрали {txt_win2}! Нажмите ПРОБЕЛ для продолжения или ESC, чтобы выйти"
 
     won_game = font.render(txt_win, True, BLUE)
 
@@ -246,7 +245,7 @@ def death_screen():
     fill = 0
     player_sprite.clear(player.image, screen)
     attempts += 1
-    game_over = font.render("Game Over. [SPACE] to restart", True, WHITE)
+    game_over = font.render("Игра окончена. [ПРОБЕЛ] чтобы продолжить", True, WHITE)
 
     screen.fill(pygame.Color("sienna1"))
     screen.blits([[game_over, (100, 100)], [tip, (100, 400)]])
@@ -280,13 +279,15 @@ def start_screen():
         if pygame.key.get_pressed()[pygame.K_2]:
             level = 1
 
-        welcome = font.render(f"Welcome to Pydash. choose level({level + 1}) by keypad", True, WHITE)
+        welcome = font.render(f"Добро пожаловать в GEOM-run.", True, WHITE)
 
-        controls = font.render("Controls: jump: Space/Up exit: Esc", True, GREEN)
+        choose = font.render(f"Выберите уровень с помощью клавиатуры", True, WHITE)
 
-        screen.blits([[welcome, (100, 100)], [controls, (100, 400)], [tip, (100, 500)]])
+        controls = font.render("Управление: прыжок: пробел выход: Esc", True, GREEN)
 
-        level_memo = font.render(f"Level {level + 1}.", True, (255, 255, 0))
+        screen.blits([[welcome, (100, 100)], [choose, (100, 150)],  [controls, (100, 400)], [tip, (100, 500)]])
+
+        level_memo = font.render(f"Уровень {level + 1}.", True, (255, 255, 0))
         screen.blit(level_memo, (100, 200))
 
 
@@ -314,7 +315,7 @@ def draw_stats(surf, money=0):
     progress_colors = [pygame.Color("red"), pygame.Color("orange"), pygame.Color("yellow"), pygame.Color("lightgreen"),
                        pygame.Color("green")]
 
-    tries = font.render(f" Attempt {str(attempts)}", True, WHITE)
+    tries = font.render(f" Попытка {str(attempts)}", True, WHITE)
     BAR_LENGTH = 600
     BAR_HEIGHT = 10
     for i in range(1, money):
@@ -413,7 +414,7 @@ bg = pygame.image.load(os.path.join("images", "bg.png"))
 
 player = Player(avatar, elements, (150, 150), player_sprite)
 
-tip = font.render("tip: tap and hold for the first few seconds of the level", True, BLUE)
+tip = font.render("совет: нажмите и удерживайте пробел в начале)", True, BLUE)
 
 while not done:
     keys = pygame.key.get_pressed()
