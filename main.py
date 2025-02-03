@@ -1,320 +1,469 @@
-import pygame
-import sys
+import csv
+import os
 import random
-
+import pygame
+from pygame.math import Vector2
+from pygame.draw import rect
 pygame.init()
+screen = pygame.display.set_mode([800, 600])
+done = False
+start = False
 
-WIDTH, HEIGHT = 800, 400
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Geometry Run")
-background_image = pygame.image.load('images/bg.png')
+clock = pygame.time.Clock()
 
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-BLUE = (50, 150, 255)
-RED = (255, 50, 50)
-GREEN = (50, 255, 50)
-YELLOW = (255, 255, 50)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
 
-FPS = 60
-clock = pygame.time.Clock()
 
-PLAYER_SIZE = 30
-OBSTACLE_WIDTH = 30
-OBSTACLE_HEIGHT = 50
-BONUS_SIZE = 20
-SPAWN_DELAY = 1500
-BONUS_SPAWN_DELAY = 2000
-BONUS_SCORE = 100
-font = pygame.font.Font(None, 36)
+color = lambda: tuple([random.randint(0, 255) for i in range(3)])  # lambda function for random color, not a constant.
+GRAVITY = Vector2(0, 0.86)  # Vector2 is a pygame
 
-pygame.mixer.init()
-menu_music = "menu_music.mp3"
-game_music = "background_music.mp3"
-pygame.mixer.music.load(menu_music)
-pygame.mixer.music.play(-1)
-
-death_sound = pygame.mixer.Sound("death_sound.mp3")
-bonus_sound = pygame.mixer.Sound("bonus_sound.mp3")
-
-all_sprites = pygame.sprite.Group()
-obstacles = pygame.sprite.Group()
 
 
 
 class Player(pygame.sprite.Sprite):
-    image = pygame.image.load('images/player.png')
-    image1 = pygame.transform.scale(image, (70, 70))
+    win: bool
+    died: bool
 
-    def __init__(self, pos):
-        super().__init__(all_sprites)
-        self.image = Player.image1
-        # вычисляем маску для эффективного сравнения
-        self.mask = pygame.mask.from_surface(self.image)
-        self.gravity = 0.2
-        self.onGround = True
+    def __init__(self, image, platforms, pos, *groups):
+        super().__init__(*groups)
+        self.onGround = False
+        self.platforms = platforms
         self.died = False
         self.win = False
+
+        self.image = pygame.transform.smoothscale(image, (32, 32))
         self.rect = self.image.get_rect(center=pos)
         self.jump_amount = 10
         self.particles = []
         self.isjump = False
-        self.player_x = 100
-        self.player_y = HEIGHT - PLAYER_SIZE - 10
-        self.player_speed_y = 20
+        self.vel = Vector2(0, 0)
+
+    def draw_particle_trail(self, x, y, color=(255, 255, 255)):
+
+        self.particles.append(
+                [[x - 5, y - 8], [random.randint(0, 25) / 10 - 1, random.choice([0, 0])],
+                 random.randint(5, 8)])
+
+        for particle in self.particles:
+            particle[0][0] += particle[1][0]
+            particle[0][1] += particle[1][1]
+            particle[2] -= 0.5
+            particle[1][0] -= 0.4
+            rect(alpha_surf, color,
+                 ([int(particle[0][0]), int(particle[0][1])], [int(particle[2]) for i in range(2)]))
+            if particle[2] <= 0:
+                self.particles.remove(particle)
+
+    def collide(self, yvel, platforms):
+        global coins
+
+        for p in platforms:
+            if pygame.sprite.collide_rect(self, p):
+                if isinstance(p, Orb) and (keys[pygame.K_UP] or keys[pygame.K_SPACE]):
+                    pygame.draw.circle(alpha_surf, (255, 255, 0), p.rect.center, 18)
+                    screen.blit(pygame.image.load("images/editor-0.9s-47px.gif"), p.rect.center)
+                    self.jump_amount = 12
+                    self.jump()
+                    self.jump_amount = 10
+
+                if isinstance(p, End):
+                    self.win = True
+
+                if isinstance(p, Spike):
+                    self.died = True
+
+                if isinstance(p, Coin):
+                    coins += 1
+
+                    p.rect.x = 0
+                    p.rect.y = 0
+
+                if isinstance(p, Platform):
+
+                    if yvel > 0:
+                        """if player is going down(yvel is +)"""
+                        self.rect.bottom = p.rect.top
+                        self.vel.y = 0
+
+                        self.onGround = True
+
+                        self.isjump = False
+                    elif yvel < 0:
+                        self.rect.top = p.rect.bottom
+                    else:
+                        self.vel.x = 0
+                        self.rect.right = p.rect.left
+                        self.died = True
 
     def jump(self):
-        self.player_speed_y = self.jump_amount = 10
+        self.vel.y = -self.jump_amount
+
+    def update(self):
+        if self.isjump:
+            if self.onGround:
+                self.jump()
+
+        if not self.onGround:
+            self.vel += GRAVITY
+
+            if self.vel.y > 100: self.vel.y = 100
+
+        self.collide(0, self.platforms)
+
+        self.rect.top += self.vel.y
+
         self.onGround = False
 
-    def update(self, event=None):
-        if event and event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE and self.onGround:
-            self.jump()
-            print(event)
-        elif event is None:
-            self.player_speed_y += self.gravity
-            self.rect.y += self.player_speed_y
+        self.collide(self.vel.y, self.platforms)
+
+        eval_outcome(self.win, self.died)
 
 
+class Draw(pygame.sprite.Sprite):
 
-
-
-
-
-
-
-
-
-class Bonus(pygame.sprite.Sprite):
-    image = pygame.image.load('images/bonus.png')
-
-    def __init__(self, pos):
-        super().__init__(all_sprites)
-        self.image = Bonus.image
+    def __init__(self, image, pos, *groups):
+        super().__init__(*groups)
+        self.image = image
         self.rect = self.image.get_rect(topleft=pos)
-        # вычисляем маску для эффективного сравнения
-        self.mask = pygame.mask.from_surface(self.image)
-
-class Obstacle(pygame.sprite.Sprite):
-    image = pygame.image.load('images/spike.png')
-
-    def __init__(self, pos):
-        super().__init__(obstacles)
-        self.image = Obstacle.image
-        self.rect = self.image.get_rect(topleft=pos)
-        # вычисляем маску для эффективного сравнения
-        self.mask = pygame.mask.from_surface(self.image)
-
-    def update(self, player):
-        # если ещё в небе
-        if not pygame.sprite.collide_mask(self, player):
-            self.rect = self.rect.move(0, 1)
-            death_sound.play()
-            running = False
 
 
+class Platform(Draw):
+
+    def __init__(self, image, pos, *groups):
+        super().__init__(image, pos, *groups)
+
+
+class Spike(Draw):
+
+    def __init__(self, image, pos, *groups):
+        super().__init__(image, pos, *groups)
+
+
+class Coin(Draw):
+
+    def __init__(self, image, pos, *groups):
+        super().__init__(image, pos, *groups)
+
+
+class Orb(Draw):
+
+    def __init__(self, image, pos, *groups):
+        super().__init__(image, pos, *groups)
+
+
+class Trick(Draw):
+
+    def __init__(self, image, pos, *groups):
+        super().__init__(image, pos, *groups)
+
+
+class End(Draw):
+
+    def __init__(self, image, pos, *groups):
+        super().__init__(image, pos, *groups)
 
 
 
-class GameProcess:
-    def __init__(self):
-        self.player = Player((150, 150))
+def init_level(map):
+    x = 0
+    y = 0
 
-        self.obstacles = []
-        self.bonuses = []
-        self.obstacle_speed = 5
+    for row in map:
+        for col in row:
 
-        self.obstacle_spawn_timer = 0
-        self.bonus_spawn_timer = 0
+            if col == "0":
+                Platform(block, (x, y), elements)
 
-        self.background_x = 0
-        self.background_speed = 2
+            if col == "Coin":
+                Coin(coin, (x, y), elements)
 
-        self.score = 0
+            if col == "Spike":
+                Spike(spike, (x, y), elements)
+            if col == "Orb":
+                orbs.append([x, y])
 
-    def reset_game(self):
-        self.__init__()
+                Orb(orb, (x, y), elements)
 
-    def main(self):
-        pygame.mixer.music.load(game_music)
-        pygame.mixer.music.play(-1)
+            if col == "T":
+                Trick(trick, (x, y), elements)
 
-        running = True
-        while running:
-            screen.blit(background_image, (0, 0))
-            all_sprites.draw(screen)
-            obstacles.draw(screen)
+            if col == "End":
+                End(avatar, (x, y), elements)
+            x += 32
+        y += 32
+        x = 0
 
-            self.background_x -= self.background_speed
-            if self.background_x <= -WIDTH:
-                self.background_x = 0
-            pygame.draw.rect(screen, GREEN, (self.background_x, HEIGHT - 50, WIDTH, 50))
-            pygame.draw.rect(screen, GREEN, (self.background_x + WIDTH, HEIGHT - 50, WIDTH, 50))
 
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                all_sprites.update(event)
-            all_sprites.update()
-            # if self.player.player_y >= HEIGHT - PLAYER_SIZE - 10:
-            #     self.player.player_y = HEIGHT - PLAYER_SIZE - 10
-            #     self.player.player_speed_y = 0
-            #     self.player.onGround = True
+def blitRotate(surf, image, pos, originpos: tuple, angle: float):
+    w, h = image.get_size()
+    box = [Vector2(p) for p in [(0, 0), (w, 0), (w, -h), (0, -h)]]
+    box_rotate = [p.rotate(angle) for p in box]
 
-            self.obstacle_spawn_timer += clock.get_time()
-            if self.obstacle_spawn_timer > SPAWN_DELAY:
-                self.obstacle_spawn_timer = 0
-                self.obstacles.append(
-                    pygame.Rect(WIDTH, HEIGHT - OBSTACLE_HEIGHT - 10, OBSTACLE_WIDTH, OBSTACLE_HEIGHT))
+    min_box = (min(box_rotate, key=lambda p: p[0])[0], min(box_rotate, key=lambda p: p[1])[1])
+    max_box = (max(box_rotate, key=lambda p: p[0])[0], max(box_rotate, key=lambda p: p[1])[1])
+    pivot = Vector2(originpos[0], -originpos[1])
+    pivot_rotate = pivot.rotate(angle)
+    pivot_move = pivot_rotate - pivot
 
-            for obstacle in self.obstacles:
-                obstacle.x -= self.obstacle_speed
+    origin = (pos[0] - originpos[0] + min_box[0] - pivot_move[0], pos[1] - originpos[1] - max_box[1] + pivot_move[1])
 
-            self.obstacles = [obstacle for obstacle in self.obstacles if obstacle.x + OBSTACLE_WIDTH > 0]
+    rotated_image = pygame.transform.rotozoom(image, angle, 1)
 
-            self.bonus_spawn_timer += clock.get_time()
-            if self.bonus_spawn_timer > BONUS_SPAWN_DELAY:
-                self.bonus_spawn_timer = 0
-                self.bonuses.append(
-                    pygame.Rect(random.randint(WIDTH, WIDTH + 200), random.randint(50, HEIGHT - 100), BONUS_SIZE,
-                                BONUS_SIZE))
+    surf.blit(rotated_image, origin)
 
-            for bonus in self.bonuses:
-                bonus.x -= self.obstacle_speed
 
-            self.bonuses = [bonus for bonus in self.bonuses if bonus.x + BONUS_SIZE > 0]
+def won_screen():
+    global attempts, level, fill
+    attempts = 0
+    player_sprite.clear(player.image, screen)
+    screen.fill(pygame.Color("yellow"))
+    txt_win1 = txt_win2 = "Nothing"
+    if level == 1:
+        if coins == 6:
+            txt_win1 = f"Coin{coins}/6! "
+            txt_win2 = "the game, Congratulations"
+    else:
+        txt_win1 = f"level{level}"
+        txt_win2 = f"Coins: {coins}/6. "
+    txt_win = f"{txt_win1} You beat {txt_win2}! Press SPACE to restart, or ESC to exit"
 
-            for obstacle in self.obstacles:
-                obstacles.update(self.player)
+    won_game = font.render(txt_win, True, BLUE)
 
-            # for bonus in self.bonuses[:]:
-            #     if player_rect.colliderect(bonus):
-            #         bonus_sound.play()
-            #         self.bonuses.remove(bonus)
-            #         self.score += BONUS_SCORE
+    screen.blit(won_game, (200, 300))
+    level += 1
 
-            if self.score % 500 == 0:
-                self.obstacle_speed += 0.1
+    wait_for_key()
+    reset()
 
-            self.score += 1
 
-            for obstacle in self.obstacles:
-                obstacle_image = pygame.image.load('images/spike.png')
-                screen.blit(obstacle_image, (obstacle.x, obstacle.y))
+def death_screen():
+    global attempts, fill
+    fill = 0
+    player_sprite.clear(player.image, screen)
+    attempts += 1
+    game_over = font.render("Game Over. [SPACE] to restart", True, WHITE)
 
-            for bonus in self.bonuses:
-                bonus_image = pygame.image.load('images/bonus.png') # БОНУСЫ
-                bonus_image_resized = pygame.transform.scale(bonus_image, (40, 40))
-                screen.blit(bonus_image_resized, bonus.topleft)
+    screen.fill(pygame.Color("sienna1"))
+    screen.blits([[game_over, (100, 100)], [tip, (100, 400)]])
 
-            score_text = font.render(f"Score: {self.score // 10}", True, BLACK)
-            screen.blit(score_text, (10, 10))
+    wait_for_key()
+    reset()
 
-            pygame.display.flip()
-            clock.tick(FPS)
 
-        self.game_over()
+def eval_outcome(won: bool, died: bool):
+    if won:
+        won_screen()
+    if died:
+        death_screen()
 
-    def game_over(self):
-        pygame.mixer.music.stop()
-        screen.blit(background_image, (0, 0))
-        game_over_text = font.render("Game Over!", True, WHITE)
-        score_text = font.render(f"Final Score: {self.score // 10}", True, WHITE)
-        screen.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2 - 100))
-        screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, HEIGHT // 2 - 50))
 
-        button_center = (WIDTH // 2, HEIGHT // 2 + 50)
-        button_radius = 30
-        pygame.draw.circle(screen, GREEN, button_center, button_radius)
-        button_text = font.render("R", True, BLACK)
-        screen.blit(button_text,
-                    (button_center[0] - button_text.get_width() // 2, button_center[1] - button_text.get_height() // 2))
+def block_map(level_num):
+    lvl = []
+    with open(level_num, newline='') as csvfile:
+        trash = csv.reader(csvfile, delimiter=',', quotechar='"')
+        for row in trash:
+            lvl.append(row)
+    return lvl
 
+
+def start_screen():
+    global level
+    if not start:
+        screen.fill(BLACK)
+        if pygame.key.get_pressed()[pygame.K_1]:
+            level = 0
+        if pygame.key.get_pressed()[pygame.K_2]:
+            level = 1
+
+        welcome = font.render(f"Welcome to Pydash. choose level({level + 1}) by keypad", True, WHITE)
+
+        controls = font.render("Controls: jump: Space/Up exit: Esc", True, GREEN)
+
+        screen.blits([[welcome, (100, 100)], [controls, (100, 400)], [tip, (100, 500)]])
+
+        level_memo = font.render(f"Level {level + 1}.", True, (255, 255, 0))
+        screen.blit(level_memo, (100, 200))
+
+
+def reset():
+    global player, elements, player_sprite, level
+
+    if level == 1:
+        pygame.mixer.music.load(os.path.join("music", "castle-town.mp3"))
+    pygame.mixer_music.play()
+    player_sprite = pygame.sprite.Group()
+    elements = pygame.sprite.Group()
+    player = Player(avatar, elements, (150, 150), player_sprite)
+    init_level(
+            block_map(
+                    level_num=levels[level]))
+
+
+def move_map():
+    for sprite in elements:
+        sprite.rect.x -= CameraX
+
+
+def draw_stats(surf, money=0):
+    global fill
+    progress_colors = [pygame.Color("red"), pygame.Color("orange"), pygame.Color("yellow"), pygame.Color("lightgreen"),
+                       pygame.Color("green")]
+
+    tries = font.render(f" Attempt {str(attempts)}", True, WHITE)
+    BAR_LENGTH = 600
+    BAR_HEIGHT = 10
+    for i in range(1, money):
+        screen.blit(coin, (BAR_LENGTH, 25))
+    fill += 0.5
+    outline_rect = pygame.Rect(0, 0, BAR_LENGTH, BAR_HEIGHT)
+    fill_rect = pygame.Rect(0, 0, fill, BAR_HEIGHT)
+    col = progress_colors[int(fill / 100)]
+    rect(surf, col, fill_rect, 0, 4)
+    rect(surf, WHITE, outline_rect, 3, 4)
+    screen.blit(tries, (BAR_LENGTH, 0))
+
+
+def wait_for_key():
+    global level, start
+    waiting = True
+    while waiting:
+        clock.tick(60)
         pygame.display.flip()
 
-        waiting = True
-        while waiting:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    mouse_x, mouse_y = event.pos
-                    if (mouse_x - button_center[0]) ** 2 + (mouse_y - button_center[1]) ** 2 <= button_radius ** 2:
-                        waiting = False
+        if not start:
+            start_screen()
 
-        self.reset_game()
-        pygame.mixer.music.load(game_music)
-        pygame.mixer.music.play(-1)
-        self.main()
-
-
-class MainMenu:
-    def __init__(self):
-        self.play_button_center = (WIDTH // 2, HEIGHT // 2)
-        self.play_button_radius = 50
-        self.customize_button_center = (WIDTH // 2 - 100, HEIGHT // 2)
-        self.customize_button_radius = 30
-
-    def draw(self):
-        screen.blit(background_image, (0, 0))
-
-        title_font = pygame.font.Font(None, 72)
-        title_text = title_font.render("Geometry Run", True, WHITE)
-        screen.blit(title_text, (
-            WIDTH // 2 - title_text.get_width() // 2,
-            HEIGHT // 4 - title_text.get_height() // 2
-        ))
-
-        pygame.draw.circle(screen, GREEN, self.play_button_center, self.play_button_radius)
-        pygame.draw.polygon(screen, BLACK, [
-            (self.play_button_center[0] - 10, self.play_button_center[1] - 15),
-            (self.play_button_center[0] - 10, self.play_button_center[1] + 15),
-            (self.play_button_center[0] + 15, self.play_button_center[1])
-        ])
-
-        pygame.draw.circle(screen, BLUE, self.customize_button_center, self.customize_button_radius)
-        pygame.draw.rect(screen, YELLOW, (
-            self.customize_button_center[0] - 12,
-            self.customize_button_center[1] - 12,
-            25, 25
-        ))
-        smile = font.render(":)", True, BLACK)
-        screen.blit(smile, (
-            self.customize_button_center[0] - smile.get_width() // 2,
-            self.customize_button_center[1] - smile.get_height() // 2
-        ))
-
-        pygame.display.flip()
-
-    def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
-                sys.exit()
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_x, mouse_y = event.pos
-                if (mouse_x - self.play_button_center[0]) ** 2 + (
-                        mouse_y - self.play_button_center[1]) ** 2 <= self.play_button_radius ** 2:
-                    return "play"
-                if (mouse_x - self.customize_button_center[0]) ** 2 + (
-                        mouse_y - self.customize_button_center[1]) ** 2 <= self.customize_button_radius ** 2:
-                    return "customize"
-        return None
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    start = True
+                    waiting = False
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
 
 
-if __name__ == "__main__":
-    menu = MainMenu()
-    game_process = GameProcess()
-    while True:
-        menu.draw()
-        action = menu.handle_events()
-        if action == "play":
-            pygame.mixer.music.load(game_music)
-            pygame.mixer.music.play(-1)
-            game_process.reset_game()
-            game_process.main()
-        elif action == "customize":
-            print("Ещё не готово.")
+def coin_count(coins):
+    if coins >= 3:
+        coins = 3
+    coins += 1
+    return coins
+
+
+def resize(img, size=(32, 32)):
+    resized = pygame.transform.smoothscale(img, size)
+    return resized
+
+
+font = pygame.font.SysFont("lucidaconsole", 20)
+
+avatar = pygame.image.load(os.path.join("images", "avatar.png"))
+pygame.display.set_icon(avatar)
+alpha_surf = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+
+# группы спрайтов
+player_sprite = pygame.sprite.Group()
+elements = pygame.sprite.Group()
+
+# картинки
+spike = pygame.image.load(os.path.join("images", "obj-spike.png"))
+spike = resize(spike)
+coin = pygame.image.load(os.path.join("images", "coin.png"))
+coin = pygame.transform.smoothscale(coin, (32, 32))
+block = pygame.image.load(os.path.join("images", "block_1.png"))
+block = pygame.transform.smoothscale(block, (32, 32))
+orb = pygame.image.load((os.path.join("images", "orb-yellow.png")))
+orb = pygame.transform.smoothscale(orb, (32, 32))
+trick = pygame.image.load((os.path.join("images", "obj-breakable.png")))
+trick = pygame.transform.smoothscale(trick, (32, 32))
+
+fill = 0
+num = 0
+CameraX = 0
+attempts = 0
+coins = 0
+angle = 0
+level = 0
+
+particles = []
+orbs = []
+win_cubes = []
+
+levels = ["level_1.csv", "level_2.csv"]
+level_list = block_map(levels[level])
+level_width = (len(level_list[0]) * 32)
+level_height = len(level_list) * 32
+init_level(level_list)
+
+pygame.display.set_caption('Pydash: Geometry Dash in Python')
+
+text = font.render('image', False, (255, 255, 0))
+
+# музыка
+music = pygame.mixer_music.load(os.path.join("music", "bossfight-Vextron.mp3"))
+pygame.mixer_music.play()
+
+bg = pygame.image.load(os.path.join("images", "bg.png"))
+
+player = Player(avatar, elements, (150, 150), player_sprite)
+
+tip = font.render("tip: tap and hold for the first few seconds of the level", True, BLUE)
+
+while not done:
+    keys = pygame.key.get_pressed()
+
+    if not start:
+        wait_for_key()
+        reset()
+
+        start = True
+
+    player.vel.x = 6
+
+    eval_outcome(player.win, player.died)
+    if keys[pygame.K_UP] or keys[pygame.K_SPACE]:
+        player.isjump = True
+
+
+    alpha_surf.fill((255, 255, 255, 1), special_flags=pygame.BLEND_RGBA_MULT)
+
+    player_sprite.update()
+    CameraX = player.vel.x
+    move_map()
+
+    screen.blit(bg, (0, 0))
+
+    player.draw_particle_trail(player.rect.left - 1, player.rect.bottom + 2,
+                               WHITE)
+    screen.blit(alpha_surf, (0, 0))
+    draw_stats(screen, coin_count(coins))
+
+    if player.isjump:
+        angle -= 8.1712
+        blitRotate(screen, player.image, player.rect.center, (16, 16), angle)
+    else:
+        player_sprite.draw(screen)
+    elements.draw(screen)
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            done = True
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                done = True
+            if event.key == pygame.K_2:
+                player.jump_amount += 1
+
+            if event.key == pygame.K_1:
+
+                player.jump_amount -= 1
+
+    pygame.display.flip()
+    clock.tick(60)
+pygame.quit()
